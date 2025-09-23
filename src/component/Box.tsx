@@ -1,62 +1,70 @@
+// src/component/Box.js
 "use client"
 
 import * as THREE from 'three'
 import React, { useRef, useState, useEffect } from 'react'
 import { useFrame, ThreeElements } from '@react-three/fiber'
 
-export default function Box(props: ThreeElements['mesh']) {
+export default function Box({
+                                initialPosition,
+                                onPositionChange,
+                                ...props
+                            }: {
+    initialPosition: [number, number, number]
+    onPositionChange?: (position: [number, number, number]) => void
+} & ThreeElements['mesh']) {
     const meshRef = useRef<THREE.Mesh>(null!)
     const [hovered, setHover] = useState(false)
     const [active, setActive] = useState(false)
-    const [position, setPosition] = useState<THREE.Vector3>(
-        new THREE.Vector3(...(props.position as [number, number, number]))
-    )
-    const [scale, setScale] = useState(1)
+    const [pressedKeys, setPressedKeys] = useState<Set<string>>(new Set())
 
-    // Movimiento con teclado
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
-            const step = 0.2
-            const newPos = position.clone()
+            setPressedKeys(prev => new Set(prev).add(event.key.toLowerCase()))
+        }
 
-            switch (event.key.toLowerCase()) {
-                case 'w':
-                case 'arrowup':
-                    newPos.z += step
-                    break
-                case 's':
-                case 'arrowdown':
-                    newPos.z -= step
-                    break
-                case 'a':
-                case 'arrowright':
-                    newPos.x -= step
-                    break
-                case 'd':
-                case 'arrowleft':
-                    newPos.x += step
-                    break
-                default:
-                    return
-            }
-
-            // Límites del plano
-            const halfSize = 10 - 1
-            if (
-                newPos.x >= -halfSize && newPos.x <= halfSize &&
-                newPos.z >= -halfSize && newPos.z <= halfSize
-            ) {
-                setPosition(newPos)
-            }
+        const handleKeyUp = (event: KeyboardEvent) => {
+            setPressedKeys(prev => {
+                const newSet = new Set(prev)
+                newSet.delete(event.key.toLowerCase())
+                return newSet
+            })
         }
 
         window.addEventListener('keydown', handleKeyDown)
-        return () => window.removeEventListener('keydown', handleKeyDown)
-    }, [position])
+        window.addEventListener('keyup', handleKeyUp)
+        return () => {
+            window.removeEventListener('keydown', handleKeyUp)
+            window.removeEventListener('keyup', handleKeyUp)
+        }
+    }, [])
 
-    useFrame((_, delta) => {
+    useFrame(() => {
         if (meshRef.current) {
-            meshRef.current.rotation.y += delta
+            const step = 0.05
+            const newPos = meshRef.current.position
+
+            if (pressedKeys.has('w') || pressedKeys.has('arrowup')) {
+                newPos.z -= step
+            }
+            if (pressedKeys.has('s') || pressedKeys.has('arrowdown')) {
+                newPos.z += step
+            }
+            if (pressedKeys.has('a') || pressedKeys.has('arrowleft')) {
+                newPos.x -= step
+            }
+            if (pressedKeys.has('d') || pressedKeys.has('arrowright')) {
+                newPos.x += step
+            }
+
+            const planeLimit = 4.5
+            newPos.x = Math.max(-planeLimit, Math.min(planeLimit, newPos.x))
+            newPos.z = Math.max(-planeLimit, Math.min(planeLimit, newPos.z))
+            newPos.y = -2.1
+
+            if (onPositionChange) {
+                onPositionChange([newPos.x, newPos.y, newPos.z])
+            }
         }
     })
 
@@ -64,14 +72,15 @@ export default function Box(props: ThreeElements['mesh']) {
         <mesh
             {...props}
             ref={meshRef}
-            position={position}
-            scale={active ? scale : 1}
+            position={initialPosition}
+            scale={active ? 1.2 : 1}
             onClick={() => setActive(!active)}
             onPointerOver={() => setHover(true)}
             onPointerOut={() => setHover(false)}
+            castShadow
         >
-            <boxGeometry args={[1, 1, 1]} />
-            <meshStandardMaterial color={'#2f74c0'} />
+            <boxGeometry args={[1, 1, 1]}/>
+            <meshStandardMaterial color={'#2f74c0'}/>
         </mesh>
     )
 }
